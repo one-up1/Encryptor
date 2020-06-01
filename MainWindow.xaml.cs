@@ -1,20 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Microsoft.Win32;
+using System;
 using System.IO;
-using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Animation;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
 namespace Encryptor
 {
@@ -29,43 +18,92 @@ namespace Encryptor
         public MainWindow()
         {
             InitializeComponent();
-
-            String s = Encrypt("Hello World", "fubar");
-            Console.WriteLine(s);
-
-            Console.WriteLine(Decrypt(s, "fubar"));
         }
 
-        private static string Encrypt(String s, String password)
+        private void bEncrypt_Click(object sender, RoutedEventArgs e)
         {
-            byte[] bytes = Encoding.Unicode.GetBytes(s);
+            if (textBox.Text.Length == 0)
+            {
+                MessageBox.Show("Geen text opgegeven", "Encryptor",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                textBox.Focus();
+                return;
+            }
+
+            if (passwordBox.Password.Length == 0)
+            {
+                MessageBox.Show("Geen wachtwoord opgegeven", "Encryptor",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                passwordBox.Focus();
+                return;
+            }
+
+            SaveFileDialog sfd = new SaveFileDialog();
+            if (sfd.ShowDialog() == true) // Waarom is "== true" nodig? ShowDialog() geeft toch een boolean terug en dat kan toch zo in een if statement? ( "if (sfd.ShowDialog())" )
+            {
+                try
+                {
+                    Encrypt(sfd.FileName);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Error: " + ex.Message);
+                    MessageBox.Show("Encryptie mislukt", "Encryptor",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        private void bDecrypt_Click(object sender, RoutedEventArgs e)
+        {
+            if (passwordBox.Password.Length == 0)
+            {
+                MessageBox.Show("Geen wachtwoord opgegeven", "Encryptor",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                passwordBox.Focus();
+                return;
+            }
+
+            OpenFileDialog ofd = new OpenFileDialog();
+            if (ofd.ShowDialog() == true)
+            {
+                try
+                {
+                    Decrypt(ofd.FileName);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Error: " + ex.Message);
+                    MessageBox.Show("Decryptie mislukt", "Encryptor",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        private void Encrypt(string path)
+        {
+            byte[] bytes = Encoding.Unicode.GetBytes(textBox.Text);
             using (Aes aes = Aes.Create())
             {
-                Rfc2898DeriveBytes pdb = new Rfc2898DeriveBytes(password, ENCRYPTION_SALT);
-                aes.Key = pdb.GetBytes(32);
-                aes.IV = pdb.GetBytes(16);
-                using (MemoryStream ms = new MemoryStream())
+                SetEncryptionKey(aes);
+                using (FileStream fs = new FileStream(path, FileMode.OpenOrCreate))
                 {
-                    using (CryptoStream cs = new CryptoStream(ms,
+                    using (CryptoStream cs = new CryptoStream(fs,
                         aes.CreateEncryptor(), CryptoStreamMode.Write))
                     {
                         cs.Write(bytes, 0, bytes.Length);
                         cs.Close();
                     }
-                    return Convert.ToBase64String(ms.ToArray());
                 }
             }
         }
 
-        private static string Decrypt(String s, String password)
+        private void Decrypt(String path)
         {
-            s = s.Replace(" ", "+");
-            byte[] bytes = Convert.FromBase64String(s);
+            byte[] bytes = File.ReadAllBytes(path);
             using (Aes aes = Aes.Create())
             {
-                Rfc2898DeriveBytes pdb = new Rfc2898DeriveBytes(password, ENCRYPTION_SALT);
-                aes.Key = pdb.GetBytes(32);
-                aes.IV = pdb.GetBytes(16);
+                SetEncryptionKey(aes);
                 using (MemoryStream ms = new MemoryStream())
                 {
                     using (CryptoStream cs = new CryptoStream(ms,
@@ -74,9 +112,17 @@ namespace Encryptor
                         cs.Write(bytes, 0, bytes.Length);
                         cs.Close();
                     }
-                    return Encoding.Unicode.GetString(ms.ToArray());
+                    textBox.Text = Encoding.Unicode.GetString(ms.ToArray());
                 }
             }
+        }
+
+        private void SetEncryptionKey(Aes aes)
+        {
+            Rfc2898DeriveBytes pdb = new Rfc2898DeriveBytes(
+                    passwordBox.Password, ENCRYPTION_SALT);
+            aes.Key = pdb.GetBytes(32);
+            aes.IV = pdb.GetBytes(16);
         }
     }
 }
